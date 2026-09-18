@@ -1,2 +1,8 @@
 export const API_PREFIX = "/api/v1";
-export const SERVER_NAME = "hirepulse-marketplace-services"
+export const SERVER_NAME = "hirepulse-marketplace-services";
+
+export const ACCOUNT_AUTH_CACHE_TTL_SECONDS = 10 * 60;
+export const getAccountAuthCacheKey = (
+  userId: string,
+  role: "client" | "freelancer",
+): string => `account:auth:${userId}:${role}`;

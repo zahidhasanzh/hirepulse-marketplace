@@ -4,26 +4,255 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { countries } from "./countries";
 import styles from "./signup.module.css";
+import { useSignUp } from "@clerk/nextjs";
 
 interface SignupFormProps {
   role: "client" | "freelancer";
 }
 
 export function SignupForm({ role }: SignupFormProps) {
+  const { signUp, fetchStatus } = useSignUp();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("");
-  const isClient = role === "client";
+  const [isError, setIsError] = useState(true);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus(
-      "The form is ready. Account creation will activate when Clerk is connected.",
-    );
+  const isClient = role === "client";
+  const isLoading = fetchStatus === "fetching";
+
+  function getErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (error && typeof error === "object" && "message" in error) {
+      return String(error.message);
+    }
+    return "We could't create account. Please check your details and try again";
   }
 
-  function handleSocialSignup(provider: "Google" | "GitHub") {
-    setStatus(
-      `${provider} signup is ready to activate when Clerk is connected.`,
+  async function redirectWithSessionToken() {
+    if (!signUp) {
+      return;
+    }
+    const { error } = await signUp.finalize({
+      navigate: async ({ session, decorateUrl }) => {
+        const token = await session.getToken();
+
+        if (!token) {
+          throw new Error("Clerk did not return a session token.");
+        }
+        window.location.assign(
+          decorateUrl(
+            `/api/sign-up?token=${encodeURIComponent(token)}&role=${encodeURIComponent(role)}`,
+          ),
+        );
+      },
+    });
+    if (error) {
+      throw error;
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("");
+    setIsError(false);
+
+    if (!signUp) {
+      setIsError(true);
+      setStatus("Authentication is still loading. Please try again.");
+      return;
+    }
+
+    const formData = new FormData(event?.currentTarget);
+    const emailAddress = String(formData.get("email") ?? "");
+
+    try {
+      const { error } = await signUp.password({
+        emailAddress,
+        password: String(formData.get("password") ?? ""),
+        firstName: String(formData.get("firstName") ?? ""),
+        lastName: String(formData.get("lastName") ?? ""),
+        legalAccepted: formData.get("terms") === "on",
+        unsafeMetadata: {
+          role,
+          country: String(formData.get("country") ?? ""),
+        },
+      });
+      if (error) {
+        throw error;
+      }
+
+      if (signUp.status === "complete") {
+        await redirectWithSessionToken();
+        return;
+      }
+      const verification = await signUp.verifications.sendEmailCode();
+      if (verification.error) {
+        throw verification.error;
+      }
+
+      setPendingEmail(emailAddress);
+      setIsVerifying(true);
+      setStatus("We sent a six-digit verification code to your email.");
+    } catch (error) {
+      setIsError(true);
+      setStatus(getErrorMessage(error));
+    }
+  }
+
+  async function handleSocialSignup(provider: "Google" | "GitHub") {
+    setStatus("");
+    setIsError(false);
+    if (!signUp) {
+      setIsError(true);
+      setStatus("Authentication is still loadin. Please try again.");
+      return;
+    }
+
+    try {
+      const { error } = await signUp.sso({
+        strategy: provider === "Google" ? "oauth_google" : "oauth_github",
+        redirectUrl: `/auth/complete?role=${encodeURIComponent(role)}`,
+        redirectCallbackUrl: `/signup?role=${role}`,
+        unsafeMetadata: { role },
+      });
+
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      setIsError(true);
+      setStatus(getErrorMessage(error));
+    }
+  }
+
+  async function handleVerification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("");
+    setIsError(false);
+
+    if (!signUp) {
+      setIsError(true);
+      setStatus("Authentication is still loading. Please try again.");
+      return;
+    }
+
+    try {
+      const { error } = await signUp.verifications.verifyEmailCode({
+        code: verificationCode,
+      });
+      if (error) {
+        throw error;
+      }
+      if (signUp.status !== "complete") {
+        throw new Error("Your email was verified, but signup is not complete.");
+      }
+      await redirectWithSessionToken();
+    } catch (error) {
+      setIsError(true);
+      setStatus(getErrorMessage(error));
+    }
+  }
+
+  async function resendVerificationCode() {
+    setStatus("");
+    setIsError(false);
+
+    if (!signUp) {
+      return;
+    }
+
+    try {
+      const { error } = await signUp.verifications.sendEmailCode();
+      setStatus("A new verification code has been sent.");
+      if (error) {
+        setIsError(true);
+        setStatus(getErrorMessage(error));
+        return;
+      }
+    } catch (error) {
+      setIsError(true);
+      setStatus(getErrorMessage(error));
+      return;
+    }
+  }
+
+  if (isVerifying) {
+    return (
+      <div className="w-full max-w-md text-left">
+        <button
+          type="button"
+          onClick={() => {
+            void signUp?.reset();
+            setIsVerifying(false);
+            setVerificationCode("");
+            setStatus("");
+          }}
+          className="mb-8 inline-flex cursor-pointer items gap-2 text-sm font-semibold text-[#5e625c] transition hover:text-[#252724]"
+        >
+          <span aria-hidden="true">←</span>
+          Back to account details
+        </button>
+        <div className="text-center">
+          <span className="inline-flex rounded-full bg-[#e9f4e6] px-3 py-1.5 text-xs font-semibold text-[#4f754d]">
+            Verify your email
+          </span>
+          <h1 className={`${styles.formTitle} mt-4 text-[#171916]`}>
+            Check your inbox
+          </h1>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#72766f]">
+            Enter the six-digit code to{" "}
+            <span className="font-semibold text-[#30332f]">{pendingEmail}</span>
+            .
+          </p>
+        </div>
+        <form onSubmit={handleVerification} className="mt-8 space-y-5">
+          <label className="grid gap-2 text-sm font-semibold text-[#30332f]">
+            Verification code
+            <input
+              value={verificationCode}
+              onChange={(event) =>
+                setVerificationCode(event.target.value.replace(/\D/g, ""))
+              }
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              minLength={6}
+              maxLength={6}
+              required
+              autoFocus
+              className="h-12 rounded-xl border border-black/13 bg-white px-4 text-center font-mono text-lg tracking-[0.35em] outline-none transition placholder:text-[#a2a59f] focus:border-[#5d8b59] focus:ring-3 focus:ring-[#dcebd9]"
+              placeholder="000000"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={isLoading || verificationCode.length !== 6}
+            className="h-12 w-full cursor-pointer rounded-xl bg-[#252724] text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b3e39] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLoading ? "Verifying..." : "Verify and continue"}
+          </button>
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => void resendVerificationCode()}
+            className="w-full cursor-pointer text-center text-sm font-semibold text-[#497446]    disabled:opacity-50"
+          >
+            Send a new code
+          </button>
+          {status && (
+            <p
+              className={`rounded-xl px-4 py-3 text-center text-xs font-medium ${isError ? "bg-[#fffoee] text-[#9a4d45]" : "bg-[#edf5eb] text-[#text-[#4e704b]"}`}
+              role={isError ? "alert" : "status"}
+            >
+              {status}
+            </p>
+          )}
+        </form>
+      </div>
     );
   }
 
@@ -232,16 +461,32 @@ export function SignupForm({ role }: SignupFormProps) {
           </span>
         </label>
 
+        <div
+          id="clerk-captcha"
+          data-cl-theme="light"
+          data-cl-size="flexible"
+          data-cl-language="auto"
+          className="flex w-full justify-center"
+        ></div>
+
         <button
           type="submit"
+          disabled={isLoading}
           className="h-12 cursor-pointer w-full rounded-xl bg-[#252724] text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b3e39] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4c7849]"
         >
-          Create {isClient ? "client" : "freelancer"} account
+          {isLoading
+            ? "Creating account..."
+            : `Create ${isClient ? "client" : "freelancer"} account`}
         </button>
 
         {status && (
           <p
-            className="rounded-xl bg-[#edf5eb] px-4 py-3 text-center text-xs font-medium text-[#4e704b]"
+            className={`rounded-xl bg-[#edf5eb] px-4 py-3 text-center text-xs font-medium text-[#4e704b] 
+              ${
+                isError
+                  ? "bg-[#fffoee] text-[#914d45]"
+                  : "bg-[#edf5eb] text-[#3e704b]"
+              }`}
             role="status"
           >
             {status}
