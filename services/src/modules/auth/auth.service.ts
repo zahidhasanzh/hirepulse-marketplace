@@ -38,7 +38,8 @@ export const receiveSignup = async (input: SignupInput): Promise<void> => {
     .insert(accounts)
     .values({
       auth_id: input.userId,
-      email: toDatabaseRole(input.role),
+      email: email,
+      role: toDatabaseRole(input.role),
       identityVerified: false,
       isOnboardingComplete: false,
       created_at: now,

@@ -2,10 +2,12 @@ import { Router } from "express";
 import { ApiResponse } from "../types/common.types.js";
 import { SERVER_NAME } from "../config/constant.js";
 import { authRouter } from "../modules/auth/auth.route.js";
+import { clientRouter } from "../modules/client/client.route.js";
 
 export const apiRouter = Router();
 
-apiRouter.use("/auth", authRouter)
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/client", clientRouter);
 
 apiRouter.get("/health", (_request, response) => {
   const body: ApiResponse<{

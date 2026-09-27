@@ -8,9 +8,17 @@ export const errorHandler: ErrorRequestHandler = (
   response,
   _next,
 ) => {
-  const statusCode = error instanceof ApiError ? error?.statusCode : 500;
+
+  console.error(error);
+
+  const statusCode = error instanceof ApiError ? error.statusCode : 500;
+
+
   const message =
-    error instanceof Error ? error.message : "An unexpted error occured.";
+    error instanceof ApiError
+      ? error.message
+      : "An unexpected error occurred. Please try again.";
+
   response.status(statusCode).json({
     success: false,
     message,

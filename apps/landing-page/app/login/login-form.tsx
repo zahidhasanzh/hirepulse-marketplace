@@ -1,20 +1,91 @@
 "use client";
-
+import * as React from "react";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useEffect, SubmitEvent, useState } from "react";
 import styles from "../signup/signup.module.css";
+import { useSignIn, useUser } from "@clerk/nextjs";
 
 export function LoginForm() {
+  const { signIn, fetchStatus } = useSignIn();
+  const { user } = useUser();
+
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("");
+  const [isError, setIsError] = useState(false);
+  const isLoading = fetchStatus === "fetching";
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus("Login is ready to activate when Clerk is connected.");
+  function redirectToDashboard(role: unknown) {
+    const dashboardUrl =
+      role === "client"
+        ? process.env.NEXT_PUBLIC_CLIENT_DASHBOARD
+        : process.env.NEXT_PUBLIC_FREELANCER_DASHBOARD;
+    if (!dashboardUrl) {
+      throw new Error("Something went wrong");
+    }
+    window.location.assign(dashboardUrl);
   }
 
-  function handleSocialLogin(provider: "Google" | "GitHub") {
-    setStatus(`${provider} login is ready to activate when Clerk is connected.`);
+  useEffect(() => {
+    if (user) redirectToDashboard(user.unsafeMetadata.role);
+  }, [user]);
+
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("");
+    setIsError(false);
+    if (!signIn) {
+      setIsError(true);
+      setStatus("Authentication is still loading.");
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    try {
+      const { error } = await signIn.password({
+        emailAddress: String(formData.get("email") ?? "").trim(),
+        password: String(formData.get("password") ?? ""),
+      });
+      if (error) throw error;
+      if (signIn.status !== "complete") {
+        throw new Error("Additional verfication is required to log in.");
+      }
+      const { error: finalizeError } = await signIn.finalize({
+        navigate: async ({ session }) => {
+          redirectToDashboard(session?.user?.unsafeMetadata?.role);
+        },
+      });
+      if (finalizeError) throw finalizeError;
+    } catch (error) {
+      setIsError(true);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "We could not log you in. Please check your credentials.",
+      );
+    }
+  }
+
+  async function handleSocialLogin(provider: "Google" | "GitHub") {
+    setStatus("");
+    setIsError(false);
+    if (!signIn) {
+      return;
+    }
+    try {
+      await signIn.sso({
+        strategy: provider === "Google" ? "oauth_google" : "oauth_github",
+        redirectCallbackUrl: "/sso-callback",
+        redirectUrl: "/login",
+      });
+    } catch (error) {
+      console.error("OAuth sign-in failed:", error);
+      setIsError(true);
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "We could not sign you in with that provider.",
+      );
+    }
   }
 
   return (
@@ -139,15 +210,17 @@ export function LoginForm() {
 
         <button
           type="submit"
-          className="h-12 w-full cursor-pointer rounded-xl bg-[#252724] text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b3e39] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4c7849]"
+          disabled={isLoading}
+          className="h-12 w-full cursor-pointer rounded-xl bg-[#252724] text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b3e39] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4c7849]
+          "
         >
-          Log in
+          {isLoading ? "Logging in ..." : "Log in"}
         </button>
 
         {status && (
           <p
-            className="rounded-xl bg-[#edf5eb] px-4 py-3 text-center text-xs font-medium text-[#4e704b]"
-            role="status"
+            className={`rounded-xl px-4 py-3 text-center text-xs font-medium ${isError ? "bg-[#fffoee] text-[#9a4d45]" : "bg-[#edf5eb] text-[#text-[#4e704b]"}`}
+            role={isError ? "alert" : "status"}
           >
             {status}
           </p>

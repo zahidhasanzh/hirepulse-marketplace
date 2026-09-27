@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { SubmitEvent, useEffect, useState } from "react";
 import { countries } from "./countries";
 import styles from "./signup.module.css";
-import { useSignUp } from "@clerk/nextjs";
+import { useSignUp, useUser } from "@clerk/nextjs";
 
 interface SignupFormProps {
   role: "client" | "freelancer";
@@ -12,6 +12,7 @@ interface SignupFormProps {
 
 export function SignupForm({ role }: SignupFormProps) {
   const { signUp, fetchStatus } = useSignUp();
+  const { user } = useUser();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("");
   const [isError, setIsError] = useState(true);
@@ -21,6 +22,22 @@ export function SignupForm({ role }: SignupFormProps) {
 
   const isClient = role === "client";
   const isLoading = fetchStatus === "fetching";
+
+  function redirectToDashboard(role: unknown) {
+    const dashboardUrl =
+      role === "client"
+        ? process.env.NEXT_PUBLIC_CLIENT_DASHBOARD
+        : process.env.NEXT_PUBLIC_FREELANCER_DASHBOARD;
+    if (!dashboardUrl) {
+      throw new Error("Something went wrong");
+    }
+    window.location.assign(dashboardUrl);
+  }
+
+  useEffect(() => {
+    console.log(user);
+    if (user) redirectToDashboard(user.unsafeMetadata.role);
+  }, [user]);
 
   function getErrorMessage(error: unknown) {
     if (error instanceof Error) {
@@ -55,7 +72,7 @@ export function SignupForm({ role }: SignupFormProps) {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
     setIsError(false);
@@ -129,7 +146,7 @@ export function SignupForm({ role }: SignupFormProps) {
     }
   }
 
-  async function handleVerification(event: FormEvent<HTMLFormElement>) {
+  async function handleVerification(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
     setIsError(false);

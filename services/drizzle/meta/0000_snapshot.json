@@ -1,5 +1,5 @@
 {
-  "id": "4a07ec38-075c-49b8-b317-2a792346a2da",
+  "id": "6344e6c4-70b3-4002-bf71-f95be885bc02",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -72,7 +72,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "accounts_auth_id_role_unique": {
+          "name": "accounts_auth_id_role_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "auth_id",
+            "role"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -96,6 +105,12 @@
         },
         "role": {
           "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "company_name": {
+          "name": "company_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -140,7 +155,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "client_metadata_auth_id_unique": {
+          "name": "client_metadata_auth_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "auth_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

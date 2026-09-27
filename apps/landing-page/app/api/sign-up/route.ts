@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
     }
     const dashboardUrl =
       role === "client"
-        ? process.env.CLIENT_DASHBOARD
-        : process.env.FREELANCER_DASHBOARD;
+        ? process.env.NEXT_PUBLIC_CLIENT_DASHBOARD
+        : process.env.NEXT_PUBLIC_FREELANCER_DASHBOARD;
     return NextResponse.redirect(new URL("/profile/edit", dashboardUrl), 303);
   } catch (error) {
     console.error("Backend signup forwarding failed,", error);
