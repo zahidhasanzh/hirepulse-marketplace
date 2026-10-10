@@ -2,10 +2,17 @@
 
 import { Icon } from "@iconify/react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { SubmitEvent, useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { SubmitEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DashboardHeader } from "../_components/dashboard/dashboard-header";
+import { getToken, useUser } from "@clerk/nextjs";
+import Image from "next/image";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { ProfileSkeleton } from "@/app/my-profile/profile-skelton";
+import { countries } from "@/utils/countries";
+import { useRouter } from "next/navigation";
+import { UserResource } from "@clerk/nextjs/types";
 
 type PreviewPortfolio = {
   id: number;
@@ -148,7 +155,13 @@ function SectionCard({
   );
 }
 
-function ProfilePreview() {
+function ProfilePreview({
+  user,
+  profileMetaData,
+}: {
+  user: UserResource | undefined | null;
+  profileMetaData: any;
+}) {
   const completedJobs = [
     {
       title: "Build a collaborative analytics dashboard",
@@ -212,25 +225,26 @@ function ProfilePreview() {
           <aside className="grid gap-5 lg:sticky lg:top-24">
             <section className="rounded-3xl border border-black/8 bg-white p-6 text-center">
               <div className="relative mx-auto h-28 w-28">
-                <span className="flex h-full w-full items-center justify-center rounded-full bg-[#496e67] text-3xl font-semibold text-white">
-                  SK
-                </span>
-                <span
-                  className="absolute right-1 bottom-1 h-5 w-5 rounded-full border-4 border-white bg-[#59a05d]"
-                  title="Available now"
+                <Image
+                  width={90}
+                  height={90}
+                  src={user?.imageUrl || ""}
+                  alt={user?.firstName || ""}
+                  className="h-28 w-28 rounded-full object-cover"
                 />
               </div>
-              <h1 className="mt-5 text-2xl font-semibold tracking-[-0.035em]">
-                Shahriar Sajeeb
+              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">
+                {user?.fullName}
               </h1>
               <p className="mt-2 text-sm leading-6 text-[#656b63]">
-                Full-stack product engineer
-                <br />
-                Next.js & TypeScript
+                {profileMetaData?.professional_title}
               </p>
               <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#777c74]">
                 <Icon icon="solar:map-point-linear" width="16" />
-                Chiang Mai, Thailand
+                {profileMetaData?.city},{" "}
+                {countries.find(
+                  (country) => country.code === user?.unsafeMetadata?.country,
+                )?.name ?? ""}
               </p>
 
               <div className="mt-6 grid grid-cols-3 border-y border-black/7 py-4">
@@ -260,20 +274,23 @@ function ProfilePreview() {
                 </p>
                 <p className="mt-2 flex items-center gap-2 text-sm font-medium">
                   <span className="h-2 w-2 rounded-full bg-[#59a05d]" />
-                  20–30 hours per week
+                  {profileMetaData?.weekly_availability}
                 </p>
                 <p className="mt-4 text-xs font-semibold tracking-wide text-[#7b8078] uppercase">
                   Languages
                 </p>
-                <p className="mt-2 text-sm text-[#656b63]">English — Fluent</p>
-                <p className="mt-1 text-sm text-[#656b63]">Bengali — Native</p>
+                {profileMetaData?.languages.map((language: any) => (
+                  <p key={language} className="mt-2 text-sm text-[#656b63]">
+                    {language.language} - {language.proficiency}
+                  </p>
+                ))}
               </div>
             </section>
 
             <section className="rounded-2xl border border-[#d2dfcf] bg-[#edf4ea] p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#476f44]">
                 <Icon icon="solar:shield-check-bold" width="20" />
-                Identity verified
+                account Verification Status
               </div>
               <div className="mt-4 grid gap-3 text-xs text-[#657063]">
                 <p className="flex items-center gap-2">
@@ -284,14 +301,16 @@ function ProfilePreview() {
                   />
                   Email verified
                 </p>
-                <p className="flex items-center gap-2">
-                  <Icon
-                    icon="solar:check-circle-bold"
-                    width="15"
-                    className="text-[#5d895a]"
-                  />
-                  Payment method verified
-                </p>
+                {profileMetaData?.indentityVerified && (
+                  <p className="flex items-center gap-2">
+                    <Icon
+                      icon="solar:check-circle-bold"
+                      width="15"
+                      className="text-[#5d895a]"
+                    />
+                    Personal Identity Verified
+                  </p>
+                )}
               </div>
             </section>
           </aside>
@@ -301,16 +320,16 @@ function ProfilePreview() {
               <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
                 <div>
                   <p className="text-xs font-semibold tracking-[0.14em] text-[#5c8159] uppercase">
-                    Available for selected projects
+                    {profileMetaData?.availability_status} for selected projects
                   </p>
                   <h2 className="mt-3 max-w-2xl text-3xl leading-tight font-semibold tracking-[-0.04em]">
-                    I build dependable digital products from idea to production.
+                    {profileMetaData?.professional_title}
                   </h2>
                 </div>
                 <div className="shrink-0 text-left sm:text-right">
                   <p className="text-xs text-[#7c8179]">Hourly rate</p>
                   <p className="mt-1 text-xl font-semibold">
-                    $85
+                    ${parseInt(profileMetaData?.hourly_rate)}
                     <span className="text-sm font-medium text-[#7c8179]">
                       /hr
                     </span>
@@ -318,20 +337,10 @@ function ProfilePreview() {
                 </div>
               </div>
               <div className="mt-6 space-y-4 text-sm leading-7 text-[#626860]">
-                <p>
-                  I help product teams turn complex ideas into fast, dependable
-                  web applications. My work spans product architecture, polished
-                  React interfaces, scalable APIs, and production
-                  infrastructure.
-                </p>
-                <p>
-                  I communicate clearly, ship in thoughtful milestones, and care
-                  deeply about the details users feel—from accessibility and
-                  performance to the quality of the final handoff.
-                </p>
+                <p>{profileMetaData?.professional_description}</p>
               </div>
               <div className="mt-6 flex flex-wrap gap-2">
-                {initialSkills.map((skill) => (
+                {profileMetaData?.skills.map((skill: string) => (
                   <span
                     key={skill}
                     className="rounded-xl bg-[#edf2eb] px-3 py-2 text-xs font-medium text-[#4f584d]"
@@ -353,45 +362,53 @@ function ProfilePreview() {
                   </h2>
                 </div>
                 <span className="text-xs text-[#838880]">
-                  {initialPortfolio.length} projects
+                  {profileMetaData?.portfolios?.length} projects
                 </span>
               </div>
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {initialPortfolio.map((project) => (
+                {profileMetaData?.portfolios?.map((project: any) => (
                   <article
                     key={project.id}
-                    className="overflow-hidden rounded-2xl border border-black/8"
+                    className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-black/9 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-black/14 hover:shadow hover:shadow-black/2"
                   >
                     <div
-                      className={`flex h-44 items-center justify-center bg-linear-to-br ${project.color}`}
+                      className="relative aspect-video overflow-hidden bg-[#e4ead8] bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${project.cover_image.url})`,
+                      }}
                     >
-                      <Icon
-                        icon={project.icon}
-                        width="48"
-                        className="text-[#425a48]"
-                      />
+                      <div className="absolute inset-0 bg-linear-to-t from-black/28 via-transparent to-transparent opacity-70" />
                     </div>
-                    <div className="p-5">
-                      <p className="text-[11px] font-semibold tracking-wide text-[#62805f] uppercase">
+                    <div className="flex flex-1 flex-col p-5">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-[#62805f] uppercase">
                         {project.category}
                       </p>
-                      <h3 className="mt-2 text-lg font-semibold">
+                      <h3 className="mt-2 line-clamp-2 text-base font-semibold tracking-[-0.015em] text-[#292d28]">
                         {project.title}
                       </h3>
-                      <p className="mt-2 text-sm leading-6 text-[#747a72]">
+                      <p className="mt-2 line-clamp-3 text-xs leading-5 text-[#777c74]">
                         {project.description}
                       </p>
-                      {project.liveLink && (
-                        <a
-                          href={project.liveLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#52784f] hover:underline"
-                        >
-                          View live project
-                          <Icon icon="solar:arrow-right-up-linear" width="15" />
-                        </a>
-                      )}
+                      <div className="mt-5 border-t border-black/7 pt-4">
+                        {project.live_url ? (
+                          <a
+                            href={project.live_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#52784f] transition hover:text-[#365f34]"
+                          >
+                            View live project
+                            <Icon
+                              icon="solar:arrow-right-up-linear"
+                              width="15"
+                            />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-[#969b94]">
+                            Portfolio case study
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -467,28 +484,29 @@ export function ProfileEditor({
 }: {
   initialEditing?: boolean;
 }) {
+  const { user, isLoaded } = useUser();
   const isEditing = initialEditing;
   const {
     register,
     handleSubmit,
     clearErrors,
     reset,
+    control,
     setError,
     formState: { errors, isDirty, isValid },
   } = useForm<FreelancerProfileFormValues>({
     mode: "onChange",
     defaultValues: {
-      firstName: "Shahriar",
-      lastName: "Sajeeb",
-      country: "Thailand",
-      city: "Chiang Mai",
-      professional_title: "Full-stack product engineer · Next.js & TypeScript",
-      professional_description:
-        "I help product teams turn complex ideas into fast, dependable web applications. My work spans product architecture, polished React interfaces, scalable APIs, and production infrastructure. I communicate clearly, ship in thoughtful milestones, and care deeply about the details users feel.",
-      hourly_rate: 85,
+      firstName: "",
+      lastName: "",
+      country: "",
+      city: "",
+      professional_title: "",
+      professional_description: "",
+      hourly_rate: 20,
       availability_status: "AVAILABLE",
       weekly_availability: "20–30 hours / week",
-      experience_level: "Expert",
+      experience_level: "Entry",
     },
   });
   const [activeSection, setActiveSection] = useState("profile-details");
@@ -501,6 +519,87 @@ export function ProfileEditor({
   const [savedDynamicValues, setSavedDynamicValues] = useState(() =>
     JSON.stringify({ skills: [], languages: initialLanguages, portfolio: [] }),
   );
+  const router = useRouter();
+  const hasInitializedProfile = useRef(false);
+
+  const { data: profileMetaData, isLoading: profileMetaDataLoading } = useQuery(
+    {
+      queryKey: ["profile-metadata"],
+      enabled: Boolean(user),
+      queryFn: async () => {
+        const token = await getToken();
+        if (!token) {
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_SERVER_URL}/freelancer/profile?role=freelancer`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+          },
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            result.message || "The client profile could not be loaded.",
+          );
+        }
+        return result.data;
+      },
+    },
+  );
+
+  useEffect(() => {
+    if (
+      !isLoaded ||
+      profileMetaDataLoading ||
+      !user ||
+      hasInitializedProfile.current
+    ) {
+      return;
+    }
+    const nextSkills = profileMetaData?.skills ?? [];
+    const nextLanguages =
+      profileMetaData?.languages?.length > 0
+        ? profileMetaData.languages
+        : initialLanguages;
+    const nextPortfolio = (profileMetaData?.portfolios ?? []).map(
+      (project: FreelancerPortfolioValue) => ({
+        ...project,
+        client_id: project.client_id,
+      }),
+    );
+    reset({
+      firstName: user.firstName ?? "",
+      lastName: user.lastName ?? "",
+      country:
+        profileMetaData?.country ??
+        (user.unsafeMetadata.country as string | undefined) ??
+        "",
+      city: profileMetaData?.city ?? "",
+      professional_title: profileMetaData?.professional_title ?? "",
+      professional_description: profileMetaData?.professional_description ?? "",
+      hourly_rate: Number(profileMetaData?.hourly_rate ?? 20),
+      availability_status: profileMetaData?.availability_status ?? "AVAILABLE",
+      experience_level: profileMetaData?.experience_level ?? "Entry",
+      skills: nextSkills,
+      languages: nextLanguages,
+      portfolios: nextPortfolio,
+    });
+    setSkills(nextSkills);
+    setLanguages(nextLanguages);
+    setPortfolio(nextPortfolio);
+    setSavedDynamicValues(
+      JSON.stringify({
+        skills: nextSkills,
+        languages: nextLanguages,
+        portfolio: nextPortfolio,
+      }),
+    );
+    hasInitializedProfile.current = true;
+  }, [isLoaded, profileMetaData, profileMetaDataLoading, reset, user]);
 
   const updateLanguage = (index: number, update: Partial<Language>) => {
     setLanguages((current) =>
@@ -572,6 +671,89 @@ export function ProfileEditor({
     setShowPortfolioForm(false);
   };
 
+  const profileMutation = useMutation({
+    mutationFn: async (values: FreelancerProfileFormValues) => {
+      if (!user) throw new Error("Your account could not be loaded.");
+
+      const token = await getToken();
+      if (!token) throw new Error("Your session has expired.");
+
+      const { firstName, lastName, portfolios, ...freelancer_metadata } =
+        values;
+
+      await user.update({
+        firstName,
+        lastName,
+        unsafeMetadata: {
+          ...user.unsafeMetadata,
+          country: values.country,
+        },
+      });
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/freelancer/profile?role=freelancer`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            freelancer_metadata,
+            freelancer_portfolios: portfolios.map(
+              ({ client_id: _clientId, ...portfolio }) => portfolio,
+            ),
+          }),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "The profile could not be saved.");
+      }
+      return result.data;
+    },
+
+    onSuccess: (_profile, values) => {
+      reset(values);
+      setSavedDynamicValues(
+        JSON.stringify({
+          skills: values.skills,
+          languages: values.languages,
+          portfolio: values.portfolios,
+        }),
+      );
+      setSaved(true);
+      toast.success("Profile saved successfully.");
+      window.setTimeout(() => setSaved(false), 3000);
+      router.push("/my-profile");
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "The profile could not saved.",
+      );
+    },
+  });
+
+  const updateAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Profile photos must be 5 MB or smaller");
+      return;
+    }
+
+    try {
+      await user?.setProfileImage({ file });
+      toast.success("Profile photo updated.");
+    } catch {
+      toast.error("The profile photo could not be updated.");
+    }
+
+    event.target.value = "";
+  };
+
   const onSubmit = (values: FreelancerProfileFormValues) => {
     let hasCollectionError = false;
 
@@ -599,37 +781,12 @@ export function ProfileEditor({
       return;
     }
 
-    const profileValues = {
-      clerk_profile: {
-        firstName: values.firstName,
-        lastName: values.lastName,
-      },
-      freelancer_metadata: {
-        professional_title: values.professional_title,
-        professional_description: values.professional_description,
-        hourly_rate: values.hourly_rate,
-        country: values.country,
-        city: values.city,
-        availability_status: values.availability_status,
-        weekly_availability: values.weekly_availability,
-        experience_level: values.experience_level,
-        skills,
-        languages,
-      },
-      freelancer_portfolios: portfolio.map((project) => ({
-        title: project.title,
-        category: project.category,
-        description: project.description,
-        live_url: project.live_url,
-        cover_image: project.cover_image,
-      })),
-    };
-
-    console.log("Freelancer profile values:", profileValues);
-    reset(values);
-    setSavedDynamicValues(JSON.stringify({ skills, languages, portfolio }));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 3000);
+    profileMutation.mutate({
+      ...values,
+      skills,
+      languages,
+      portfolios: portfolio,
+    });
   };
 
   const onInvalid = () => {
@@ -647,7 +804,44 @@ export function ProfileEditor({
     languages.length > 0 &&
     languages.every((item) => item.language);
 
-  const strength = Math.min(100, 75 + skills.length + portfolio.length * 3);
+  const formValues = useWatch({ control });
+  const personalFields = [
+    formValues.firstName,
+    formValues.lastName,
+    formValues.country,
+    formValues.city,
+  ];
+
+  const professionalFields = [
+    formValues.professional_title,
+    formValues.professional_description,
+    formValues.hourly_rate,
+    formValues.availability_status,
+    formValues.weekly_availability,
+    formValues.experience_level,
+  ];
+
+  const completedLanguages = languages.filter((item) => item.language).length;
+
+  const strength = (
+    Math.min(user?.hasImage ? 10 : 0) +
+    personalFields.filter(Boolean).length * 3.75 +
+    professionalFields.filter(Boolean).length * 5 +
+    Math.min(skills.length / 10, 1) * 15 +
+    Math.min(completedLanguages / 3, 1) * 10 +
+    Math.min(portfolio.length / 3, 1) * 20
+  ).toFixed(2);
+
+  const strengthSuggestions = [
+    !user?.hasImage && "Add a real profile photo.",
+    personalFields.some((field) => !field) && "Complete your personal details.",
+    professionalFields.some((field) => !field) &&
+      "Complete every professional field.",
+    skills.length < 10 && `Add ${10 - skills.length} more skills.`,
+    completedLanguages < 3 && `Add ${3 - completedLanguages} more language.`,
+    portfolio.length < 3 &&
+      `Add ${3 - portfolio.length} more portfolio projects.`,
+  ].filter(Boolean) as string[];
 
   useEffect(() => {
     if (!isEditing) return;
@@ -682,8 +876,12 @@ export function ProfileEditor({
     return () => observer.disconnect();
   }, [isEditing]);
 
+  if (!isLoaded || profileMetaDataLoading) {
+    return <ProfileSkeleton />;
+  }
+
   if (!isEditing) {
-    return <ProfilePreview />;
+    return <ProfilePreview user={user} profileMetaData={profileMetaData} />;
   }
 
   return (
@@ -720,25 +918,61 @@ export function ProfileEditor({
           <aside className="grid gap-5 xl:sticky xl:top-24">
             <section className="rounded-2xl border border-black/8 bg-white p-5 text-center">
               <div className="relative mx-auto h-24 w-24">
-                <span className="flex h-full w-full items-center justify-center rounded-full bg-[#496e67] text-2xl font-semibold text-white">
-                  SK
-                </span>
-                <button
-                  type="button"
+                <Image
+                  width={90}
+                  height={90}
+                  src={user?.imageUrl || ""}
+                  alt={user?.firstName || ""}
+                  className="h-24 w-24 rounded-full object-cover"
+                />
+                <label
                   aria-label="Change profile photo"
                   className="absolute right-0 bottom-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-[#252724] text-white"
                 >
                   <Icon icon="solar:camera-linear" width="16" />
-                </button>
+                  <input
+                    type="file"
+                    className="sr-only"
+                    accept="image/png,image/jpeg, image/webp"
+                    onChange={updateAvatar}
+                  />
+                </label>
               </div>
-              <h2 className="mt-4 text-lg font-semibold">Shahriar Sajeeb</h2>
+              <h2 className="mt-4 text-lg font-semibold">{user?.fullName}</h2>
               <p className="mt-1 text-xs text-[#777c74]">
-                Full-stack product engineer
+                {profileMetaData?.professional_title}
               </p>
               <div className="mt-5 flex items-center justify-between text-xs">
                 <span className="font-medium">Profile strength</span>
-                <strong className="text-[#52784f]">{strength}%</strong>
+
+                <span className="flex items-center gap-1.5">
+                  <strong className="text-[#52784f]">{strength}%</strong>
+
+                  {parseInt(strength) < 100 && (
+                    <span className="group relative">
+                      <button
+                        type="button"
+                        aria-label="How to complete your profile"
+                        className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[#789075] text-[10px] font-bold text-[#52784f]"
+                      >
+                        ?
+                      </button>
+
+                      <span className="pointer-events-none absolute right-0 bottom-6 z-20 mb-2 hidden w-56 rounded-xl bg-[#252724] p-3 text-left text-[11px] font-normal text-white shadow-xl group-hover:block group-focus-within:block">
+                        <strong className="mb-1 block font-semibold">
+                          Reach 100%
+                        </strong>
+                        {strengthSuggestions.map((suggesion) => (
+                          <span key={suggesion} className="block text-white/75">
+                            . {suggesion}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                  )}
+                </span>
               </div>
+
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e6e9e3]">
                 <div
                   className="h-full rounded-full bg-[#648b61] transition-all"
@@ -814,16 +1048,30 @@ export function ProfileEditor({
                 <label className={labelClass}>
                   Country *
                   <select
-                    className={inputClass}
                     {...register("country", {
                       required: "Country is required.",
                     })}
+                    defaultValue={(() => {
+                      const saveCountry = user?.unsafeMetadata?.country;
+                      if (typeof saveCountry !== "string") return "";
+                      return (
+                        countries.find(
+                          (country) =>
+                            country.code === saveCountry ||
+                            country.name === saveCountry,
+                        )?.code ?? ""
+                      );
+                    })()}
+                    className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm outline-none font-normal focus:border-[#6e916a]"
                   >
-                    <option>Thailand</option>
-                    <option>United States</option>
-                    <option>United Kingdom</option>
-                    <option>Canada</option>
-                    <option>Australia</option>
+                    <option value="" disabled>
+                      Select your country
+                    </option>
+                    {countries.map((country) => (
+                      <option value={country.code} key={country.code}>
+                        {country.name}
+                      </option>
+                    ))}
                   </select>
                   {errors.country && (
                     <span className="text-xs font-medium text-[#a44c4c]">
@@ -835,6 +1083,7 @@ export function ProfileEditor({
                   City *
                   <input
                     className={inputClass}
+                    placeholder="New York"
                     {...register("city", { required: "City is required." })}
                   />
                   {errors.city && (
@@ -950,6 +1199,7 @@ export function ProfileEditor({
                   Professional title *
                   <input
                     className={inputClass}
+                    placeholder="Software Enginnear"
                     {...register("professional_title", {
                       required: "Professional title is required.",
                     })}
@@ -963,6 +1213,7 @@ export function ProfileEditor({
                 <label className={labelClass}>
                   Professional Description *
                   <textarea
+                    placeholder="Write somthing about your profession."
                     rows={7}
                     {...register("professional_description", {
                       required: "Professional description is required.",
@@ -1156,7 +1407,7 @@ export function ProfileEditor({
                 {portfolio.map((project) => (
                   <article
                     key={project.client_id}
-                    className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-black/9 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-black/14 hover:shadow-lg hover:shadow-black/6"
+                    className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-black/9 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-black/14 hover:shadow hover:shadow-black/2"
                   >
                     <div
                       className="relative aspect-video overflow-hidden bg-[#e4ead8] bg-cover bg-center"
@@ -1252,7 +1503,7 @@ export function ProfileEditor({
                 disabled={!canSave}
                 className="ml-auto cursor-pointer rounded-xl bg-[#252724] px-6 py-3 text-sm font-semibold text-white hover:bg-[#3b3e39] disabled:cursor-not-allowed disabled:opacity-45"
               >
-                Save profile
+                {profileMutation.isPending ? "Saving..." : "Save profile"}
               </button>
             </div>
           </form>

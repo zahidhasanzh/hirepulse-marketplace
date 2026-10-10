@@ -8,6 +8,13 @@
       "when": 1790406450356,
       "tag": "0000_blue_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790486545394,
+      "tag": "0001_little_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }
